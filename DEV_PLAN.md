@@ -134,7 +134,11 @@ independently replaceable.
 ## 9. Verification
 
 - `npm run lint && npm run test && npm run build` must be green before any phase commit.
-- Current: lint 0/0, **24 tests** pass, build emits the PWA service worker + manifest.
+- `npm run test:e2e` (Playwright) runs the full app in Chromium against the production
+  build served at `/secure-page/`; it covers create-vault, add/reveal/delete card,
+  wrong-password rejection, and persistence across reload. Each test wipes IndexedDB.
+- Current: lint 0/0, **24 unit tests** pass, **7 E2E tests** pass, build emits the PWA
+  service worker + manifest.
 - Crypto/store tests use an in-memory `VaultStorage` stand-in (no fake-indexeddb).
 - Manual: install as PWA on a real phone (Android Chrome + iOS Safari), offline load,
   biometric unlock (Phase 4).

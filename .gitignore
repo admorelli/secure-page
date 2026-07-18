@@ -9,9 +9,12 @@ dist/
 .env.local
 .env.*.local
 
-# Editor/OS
+*~
 .DS_Store
 Thumbs.db
 *.swp
-*.swo
-*~
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/

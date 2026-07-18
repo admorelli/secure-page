@@ -34,6 +34,7 @@ All verified to pass on this branch:
 | `npm run lint` | Oxlint over `src` (0 errors / 0 warnings) |
 | `npm run format` | Prettier `--write src` |
 | `npm run test` | Vitest (run once; 24 tests pass) |
+| `npm run test:e2e` | Playwright — builds, serves via `vite preview` at `/secure-page/`, runs `e2e/*.spec.ts` (7 tests). Requires `npx playwright install chromium` once. |
 | `npm run deploy` | `npm run build` then push `dist/` to GitHub Pages via `gh-pages` |
 
 Deployed at the GitHub Pages project subpath **`/secure-page/`** (set as Vite `base`).

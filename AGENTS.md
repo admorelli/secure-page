@@ -29,6 +29,9 @@ dependency**.
 - `npm run lint` — Oxlint over `src` (target: 0 errors / 0 warnings)
 - `npm run format` — Prettier `--write src`
 - `npm run test` — Vitest run-once (currently **24 tests**)
+- `npm run test:e2e` — Playwright: builds, serves via `vite preview` at the
+  `/secure-page/` subpath, runs `e2e/*.spec.ts` (7 tests). Requires
+  `npx playwright install chromium` once (browser binary is gitignored).
 - `npm run deploy` — build + push to GitHub Pages
 
 ## Conventions
@@ -49,6 +52,18 @@ dependency**.
   `fake-indexeddb` unless a test genuinely needs the real IndexedDB.
 - Oxlint uses `noUnusedLocals`/`noUnusedParameters` (tsconfig). Leftover unused vars
   fail the build (`tsc -b`), not just lint.
+
+## Testing layout (important)
+
+- **Unit/integration:** Vitest, run via `npm run test`. Scoped to `src/**/*.test.ts`
+  by `vitest.config.ts` — it MUST NOT collect `e2e/*.spec.ts` (those need the
+  Playwright runner; `@playwright/test`'s `test.beforeEach` throws under vitest).
+- **E2E:** Playwright (`npm run test:e2e`), `e2e/*.spec.ts` + `e2e/helpers.ts`,
+  driven by `playwright.config.ts`. App is served at the `/secure-page/` subpath
+  (baseURL includes it). The webServer builds + runs `vite preview` automatically.
+  Each test wipes IndexedDB in `beforeEach` for isolation. CI workflow:
+  `.github/workflows/e2e.yml` (fires on `master` only — dormant until the project
+  is ready; flip the branch filter to gate feature branches).
 
 ## What's built vs planned
 
