@@ -81,6 +81,19 @@ test("data persists across reload and unlocks with the right password", async ({
   await expect(page.getByRole("heading", { name: "Cards" })).toHaveCount(0);
 });
 
+test("biometric button degrades gracefully when no platform authenticator", async ({
+  page,
+}) => {
+  // The old disabled placeholder must be gone.
+  await page.goto("/");
+  // Headless Chromium has no platform authenticator, so biometric unlock is
+  // not offered; password remains the path. This guards against a broken
+  // disabled button regressing. (Real PRF crypto is covered by unit tests.)
+  await expect(page.getByRole("button", { name: "Unlock with biometrics" })).toHaveCount(0);
+  await createVault(page, "correct horse battery");
+  await expect(page.getByRole("heading", { name: "Cards" })).toBeVisible();
+});
+
 test("lock clears decrypted data; re-unlock restores it", async ({ page }) => {
   await createVault(page, "correct horse battery");
   await addCard(page);

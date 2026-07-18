@@ -11,8 +11,9 @@ network use is a static GitHub Pages deploy.
 
 > Status: **MVP functional.** Encrypted credit-card vault is implemented end-to-end
 > (create vault → lock/unlock → add/edit/delete/decrypt cards, all in IndexedDB).
-> The "Unlock with biometrics" button is a disabled placeholder (a `BiometricUnlockStrategy`
-> via WebAuthn-PRF is planned, not yet built). No server, no telemetry.
+> Biometric unlock (WebAuthn PRF) is implemented and enabled from the create
+> screen when a platform authenticator exists; password remains the fallback. No
+> server, no telemetry.
 
 ## Tech stack
 
@@ -83,12 +84,12 @@ src/
   via `WebCryptoProvider`. A WebAuthn-PRF or native-backed provider slots in here.
 - **`VaultStorage`** — persist/load/clear the encrypted envelope. Today: IndexedDB.
 - **`UnlockStrategy`** — how the key is obtained. Today: `PasswordUnlockStrategy`
-  (master password). A `BiometricUnlockStrategy` would implement the same
-  interface without touching the vault core or UI.
+  (master password) and `BiometricUnlockStrategy` (WebAuthn PRF). The
+  biometric strategy wraps the password one as a fallback. Both implement the
+  same interface without touching the vault core or UI.
 - **`VaultStore`** — the single object the UI talks to: `exists`, `create`,
-  `unlock`, `lock`, `addRecord`, `upsertRecord`, `deleteRecord`, `listRecords`,
-  `wipe`. It keeps the envelope in memory while unlocked so record CRUD can
-  re-encrypt and persist without re-reading storage.
+  `unlock`, `unlockWithBiometric`, `lock`, `addRecord`, `upsertRecord`,
+  `deleteRecord`, `listRecords`, `wipe`, `biometricAvailable`, `setBiometric`.
 
 ## Implementation phases
 
@@ -98,7 +99,7 @@ All work is on the `feat/pwa-poc` branch (not yet merged to `master`).
 - **Phase 2** — swappable `VaultStorage` (IndexedDB) + `UnlockStrategy`
   (password); wired real `create`/`unlock`/`lock` into the UI.
 - **Phase 3** — real encrypted credit-card CRUD through the vault (add/edit/delete/reveal).
-- **Phase 4 (planned)** — biometric unlock via a `BiometricUnlockStrategy` (WebAuthn PRF).
+- **Phase 4** — biometric unlock via a `BiometricUnlockStrategy` (WebAuthn PRF); password fallback.
 - **Phase 5 (planned)** — encrypted backup export/import.
 - **Phase 6 (planned)** — other record types (login, note, secret).
 

@@ -3,7 +3,7 @@ import type { VaultStorage } from "./storage";
 import type { UnlockStrategy } from "./strategy";
 import { defaultCryptoProvider } from "./provider";
 import { IndexedDbStorage } from "./storage";
-import { PasswordUnlockStrategy } from "./strategy";
+import { PasswordUnlockStrategy, BiometricUnlockStrategy } from "./strategy";
 import {
   lockVault,
   encryptRecord,
@@ -26,7 +26,9 @@ import {
 export class VaultStore {
   private provider: CryptoProvider;
   private storage: VaultStorage;
-  private strategy: UnlockStrategy;
+  private passwordStrategy: UnlockStrategy;
+  private biometricStrategy: BiometricUnlockStrategy;
+  private useBiometric = false;
   private state: UnlockedVault | null = null;
   private envelope: VaultEnvelope | null = null;
 
@@ -37,12 +39,23 @@ export class VaultStore {
   }) {
     this.provider = opts?.provider ?? defaultCryptoProvider;
     this.storage = opts?.storage ?? new IndexedDbStorage();
-    this.strategy = opts?.strategy ?? new PasswordUnlockStrategy();
+    this.passwordStrategy = opts?.strategy ?? new PasswordUnlockStrategy();
+    this.biometricStrategy = new BiometricUnlockStrategy();
   }
 
   /** True if no vault has been created yet (first run). */
   async exists(): Promise<boolean> {
     return (await this.storage.load()) !== null;
+  }
+
+  /** True if the runtime supports platform biometrics (WebAuthn PRF). */
+  async biometricAvailable(): Promise<boolean> {
+    return this.provider.prfSupported();
+  }
+
+  /** Opt in/out of biometric unlock. When enabled, `create` registers a passkey. */
+  setBiometric(enabled: boolean): void {
+    this.useBiometric = enabled;
   }
 
   isUnlocked(): boolean {
@@ -52,14 +65,27 @@ export class VaultStore {
   /** Create a new vault (first run). Throws if one already exists. */
   async create(password: string): Promise<void> {
     if (await this.exists()) throw new Error("Vault already exists");
-    const res = await this.strategy.create(this.provider, this.storage, password);
+    const strategy = this.useBiometric ? this.biometricStrategy : this.passwordStrategy;
+    const res = await strategy.create(this.provider, this.storage, password);
     this.state = res.unlocked;
     this.envelope = res.envelope;
   }
 
-  /** Unlock an existing vault. Throws WrongPasswordError on failure. */
+  /** Unlock with the master password (always works; the fallback path). */
   async unlock(password: string): Promise<void> {
-    const res = await this.strategy.unlock(this.provider, this.storage, password);
+    const res = await this.passwordStrategy.unlock(this.provider, this.storage, password);
+    this.state = res.unlocked;
+    this.envelope = res.envelope;
+  }
+
+  /** Unlock via biometric (WebAuthn PRF). Throws if biometrics aren't set up. */
+  async unlockWithBiometric(): Promise<void> {
+    if (!this.envelope && !(await this.exists())) throw new Error("No vault exists");
+    const res = await this.biometricStrategy.unlock(
+      this.provider,
+      this.storage,
+      "",
+    );
     this.state = res.unlocked;
     this.envelope = res.envelope;
   }

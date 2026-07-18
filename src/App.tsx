@@ -29,6 +29,15 @@ function Locked({
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
+
+  useEffect(() => {
+    store.biometricAvailable().then((ok) => {
+      setBioAvailable(ok);
+      if (ok) setBioEnabled(true); // opt-in by default when supported
+    });
+  }, [store]);
 
   const submit = async () => {
     setError(null);
@@ -42,6 +51,7 @@ function Locked({
           setError("Passwords do not match.");
           return;
         }
+        store.setBiometric(bioAvailable && bioEnabled);
         await store.create(pw);
       } else {
         await store.unlock(pw);
@@ -49,6 +59,16 @@ function Locked({
       onResult(true);
     } catch (e) {
       onResult(false, e instanceof Error ? e.message : "Failed");
+    }
+  };
+
+  const unlockBio = async () => {
+    setError(null);
+    try {
+      await store.unlockWithBiometric();
+      onResult(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Biometric unlock failed");
     }
   };
 
@@ -83,8 +103,18 @@ function Locked({
       <button onClick={submit} disabled={!pw}>
         {hasVault ? "Unlock" : "Create vault"}
       </button>
-      {hasVault && (
-        <button className="ghost" onClick={submit} disabled>
+      {!hasVault && bioAvailable && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={bioEnabled}
+            onChange={(e) => setBioEnabled(e.target.checked)}
+          />
+          Enable unlock with biometrics (fingerprint / Face ID)
+        </label>
+      )}
+      {hasVault && bioAvailable && (
+        <button className="ghost" onClick={unlockBio}>
           Unlock with biometrics
         </button>
       )}

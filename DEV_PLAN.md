@@ -115,8 +115,9 @@ independently replaceable.
   wired real `create`/`unlock`/`lock` into the UI; auto-lock on tab hide.
 - **Phase 3 — DONE.** Real encrypted credit-card CRUD through the vault (add/edit/delete/
   reveal-on-unlock), Luhn + expiry + CVC/PIN validation, no sample data.
-- **Phase 4 — PLANNED.** Biometric unlock: `BiometricUnlockStrategy` via WebAuthn PRF;
-  password fallback. Enroll + unlock flows.
+- **Phase 4 — DONE.** Biometric unlock: `BiometricUnlockStrategy` via WebAuthn
+  PRF; password fallback. A DEK is wrapped under both a password-KEK and a
+  biometric-KEK so either path opens the same vault.
 - **Phase 5 — PLANNED.** Encrypted backup: export/import the `VaultEnvelope` blob (file or
   clipboard), local-only to keep the zero-knowledge promise.
 - **Phase 6 — PLANNED.** Other record types: login/password, secure note, app secret.
@@ -137,7 +138,7 @@ independently replaceable.
 - `npm run test:e2e` (Playwright) runs the full app in Chromium against the production
   build served at `/secure-page/`; it covers create-vault, add/reveal/delete card,
   wrong-password rejection, and persistence across reload. Each test wipes IndexedDB.
-- Current: lint 0/0, **24 unit tests** pass, **7 E2E tests** pass, build emits the PWA
+- Current: lint 0/0, **27 unit tests** pass, **8 E2E tests** pass, build emits the PWA
   service worker + manifest.
 - Crypto/store tests use an in-memory `VaultStorage` stand-in (no fake-indexeddb).
 - Manual: install as PWA on a real phone (Android Chrome + iOS Safari), offline load,

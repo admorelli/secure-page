@@ -67,10 +67,12 @@ dependency**.
 
 ## What's built vs planned
 
-- **Built (Phases 1–3):** swappable crypto provider (PBKDF2 + AES-GCM-256); swappable
-  IndexedDB storage; password `UnlockStrategy`; real create/unlock/lock wired to UI;
-  encrypted credit-card add/edit/delete/reveal with Luhn + expiry + CVC/PIN validation;
-  auto-lock on tab hide.
+- **Built (Phases 1–4):** swappable crypto provider (PBKDF2 + AES-GCM-256);
+  swappable IndexedDB storage; password `UnlockStrategy`; **biometric
+  `UnlockStrategy` via WebAuthn PRF** (key-wrapped DEK — password is the
+  fallback). Real create/unlock/lock wired to UI; encrypted credit-card
+  add/edit/delete/reveal with Luhn + expiry + CVC/PIN validation; auto-lock on
+  tab hide.
 - **Planned:** Phase 4 biometric unlock (`BiometricUnlockStrategy` via WebAuthn PRF);
   Phase 5 encrypted backup export/import; Phase 6 other record types (login/note/secret).
 
@@ -93,8 +95,10 @@ src/App.tsx            UI: Locked / CardForm / CardView / Cards screens
 
 ## Pitfalls
 
-- The "Unlock with biometrics" button is a **disabled placeholder** — do not wire real
-  behavior there until Phase 4 (WebAuthn PRF). Keep it disabled.
+- Biometric unlock is **implemented** (Phase 4): `BiometricUnlockStrategy` via
+  WebAuthn PRF, enabled from the create screen when a platform authenticator
+  exists. Password is always the fallback. The DEK is wrapped under both KEKs,
+  so either path opens the same vault — do NOT re-introduce a separate key path.
 - Never persist plaintext, the `CryptoKey`, or decrypted records. `VaultStore.lock()`
   clears the key AND the in-memory envelope.
 - Changing `base` in `vite.config.ts` breaks the GitHub Pages path; keep `/secure-page/`
