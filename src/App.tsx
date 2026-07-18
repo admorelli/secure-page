@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { maskCardNumber, formatCardNumber, type CreditCard } from "./lib/mask";
+import { createVaultStore, type VaultStore } from "./lib/crypto/store";
 
-// PoC sample data only — real cards will be stored encrypted in IndexedDB (Phase 3).
+// PoC sample data only — real cards will be added via the encrypted vault (Phase 3).
 const SAMPLE_CARDS: CreditCard[] = [
   {
     id: "1",
@@ -28,26 +29,77 @@ const SAMPLE_CARDS: CreditCard[] = [
   },
 ];
 
-function Locked({ onUnlock }: { onUnlock: () => void }) {
+function Locked({
+  store,
+  hasVault,
+  onResult,
+}: {
+  store: VaultStore;
+  hasVault: boolean;
+  onResult: (ok: boolean, error?: string) => void;
+}) {
   const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setError(null);
+    try {
+      if (!hasVault) {
+        if (pw.length < 8) {
+          setError("Use at least 8 characters.");
+          return;
+        }
+        if (pw !== confirm) {
+          setError("Passwords do not match.");
+          return;
+        }
+        await store.create(pw);
+      } else {
+        await store.unlock(pw);
+      }
+      onResult(true);
+    } catch (e) {
+      onResult(false, e instanceof Error ? e.message : "Failed");
+    }
+  };
+
   return (
     <main className="screen lock">
       <div className="brand">Secure Page</div>
-      <p className="sub">Local encrypted vault</p>
+      <p className="sub">
+        {hasVault ? "Local encrypted vault" : "Create your master password"}
+      </p>
+      {!hasVault && (
+        <p className="warn">
+          There is no recovery if you forget this. Stored only on this device.
+        </p>
+      )}
       <input
         type="password"
         placeholder="Master password"
         value={pw}
         onChange={(e) => setPw(e.target.value)}
-        autoComplete="current-password"
+        autoComplete={hasVault ? "current-password" : "new-password"}
       />
-      <button onClick={onUnlock} disabled={!pw}>
-        Unlock
+      {!hasVault && (
+        <input
+          type="password"
+          placeholder="Confirm password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="new-password"
+        />
+      )}
+      {error && <p className="error">{error}</p>}
+      <button onClick={submit} disabled={!pw}>
+        {hasVault ? "Unlock" : "Create vault"}
       </button>
-      <button className="ghost" onClick={onUnlock}>
-        Unlock with biometrics
-      </button>
-      <p className="warn">PoC — unlocking uses no real crypto yet.</p>
+      {hasVault && (
+        <button className="ghost" onClick={submit} disabled>
+          Unlock with biometrics
+        </button>
+      )}
     </main>
   );
 }
@@ -122,10 +174,39 @@ function Cards({ onLock }: { onLock: () => void }) {
 }
 
 export default function App() {
+  const [store] = useState<VaultStore>(() => createVaultStore());
+  const [hasVault, setHasVault] = useState<boolean>(false);
   const [unlocked, setUnlocked] = useState(false);
+
+  useEffect(() => {
+    store.exists().then(setHasVault);
+    const onHide = () => {
+      store.lock();
+      setUnlocked(false);
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [store]);
+
   return unlocked ? (
-    <Cards onLock={() => setUnlocked(false)} />
+    <Cards
+      onLock={() => {
+        store.lock();
+        setUnlocked(false);
+      }}
+    />
   ) : (
-    <Locked onUnlock={() => setUnlocked(true)} />
+    <Locked
+      store={store}
+      hasVault={hasVault}
+      onResult={(ok, error) => {
+        if (ok) {
+          setHasVault(true);
+          setUnlocked(true);
+        } else {
+          console.warn("unlock failed:", error);
+        }
+      }}
+    />
   );
 }
