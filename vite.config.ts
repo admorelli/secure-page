@@ -52,6 +52,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // Take control immediately and purge stale cached shells so devices
+        // hit with an old service worker pick up new deploys without manual
+        // cache clearing.
+        clientsClaim: true,
+        skipWaiting: true,
       },
     }),
   ],

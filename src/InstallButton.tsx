@@ -18,13 +18,12 @@ function isIOS() {
 
 function isBrave() {
   const nav = navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } };
-  // Brave also hides behind Chrome UA; best-effort detection.
   return (
     "brave" in nav ||
     /Brave/.test(navigator.userAgent) ||
-    // Brave on Android often exposes this experimental flag
-    typeof (navigator as unknown as { userAgentData?: { brands?: { brand: string }[] } })
-      .userAgentData?.brands?.some((b) => /Brave/.test(b.brand)) === "boolean"
+    typeof (
+      navigator as unknown as { userAgentData?: { brands?: { brand: string }[] } }
+    ).userAgentData?.brands?.some((b) => /Brave/.test(b.brand)) === "boolean"
   );
 }
 
@@ -32,12 +31,13 @@ function isBrave() {
  * Install affordance for the PWA.
  *
  * - Chrome/Edge fire `beforeinstallprompt`: show a real "Install" button.
- * - Brave / iOS never fire it: show a short "Add to Home Screen" hint with the
- *   correct per-platform steps, so install is still discoverable.
+ * - Brave / iOS never fire it: show a prominent, dismissible banner with the
+ *   correct per-platform steps, so install is discoverable without a prompt.
  */
 export function InstallButton() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showHint, setShowHint] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -45,15 +45,8 @@ export function InstallButton() {
       setPromptEvent(e as BeforeInstallPromptEvent);
     };
     window.addEventListener("beforeinstallprompt", handler as EventListener);
-    // If no prompt fires shortly, offer the manual hint for Brave/iOS.
-    const t = window.setTimeout(() => {
-      if (!promptEvent) setShowHint(isIOS() || isBrave());
-    }, 1500);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handler as EventListener);
-      window.clearTimeout(t);
-    };
-  }, [promptEvent]);
+    return () => window.removeEventListener("beforeinstallprompt", handler as EventListener);
+  }, []);
 
   const install = async () => {
     if (!promptEvent) return;
@@ -62,31 +55,58 @@ export function InstallButton() {
     setPromptEvent(null);
   };
 
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  if (dismissed) return null;
+
+  // Native install prompt available (Chrome/Edge).
   if (promptEvent) {
     return (
-      <button className="install-btn" onClick={install}>
-        Install app
+      <div className="install-banner">
+        <div className="install-banner-body">
+          <span className="install-banner-title">Install Secure Page</span>
+          <span className="install-banner-sub">
+            Add to your home screen for offline, app-like access.
+          </span>
+        </div>
+        <button className="install-banner-btn" onClick={install}>
+          Install
+        </button>
+        <button className="install-banner-x" aria-label="Dismiss" onClick={() => setDismissed(true)}>
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  // No native prompt: Brave / iOS. Show explicit steps + copy link.
+  const showManual = isIOS() || isBrave();
+  if (!showManual) return null;
+
+  const steps = isIOS()
+    ? "iPhone: open in Safari → Share → Add to Home Screen."
+    : "Brave: tap ⋮ menu → Add to Home Screen (enable Settings → Flags → PWA install if hidden).";
+
+  return (
+    <div className="install-banner">
+      <div className="install-banner-body">
+        <span className="install-banner-title">Add to Home Screen</span>
+        <span className="install-banner-sub">{steps}</span>
+      </div>
+      <button className="install-banner-btn" onClick={copyLink}>
+        {copied ? "Copied!" : "Copy link"}
       </button>
-    );
-  }
-
-  if (showHint && isIOS()) {
-    return (
-      <p className="install-hint">
-        On iPhone, open this in <b>Safari</b> → tap <b>Share</b> → <b>Add to Home
-        Screen</b>.
-      </p>
-    );
-  }
-
-  if (showHint && isBrave()) {
-    return (
-      <p className="install-hint">
-        In Brave: tap the <b>⋮ menu</b> → <b>Add to Home Screen</b> (or enable
-        <b> Settings → Flags → PWA install</b> if the option is hidden).
-      </p>
-    );
-  }
-
-  return null;
+      <button className="install-banner-x" aria-label="Dismiss" onClick={() => setDismissed(true)}>
+        ×
+      </button>
+    </div>
+  );
 }
