@@ -4,6 +4,9 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages serves project sites from /<repo>/ — Vite must emit assets
+  // (and the manifest + service worker) under this subpath or they 404.
+  base: "/secure-page/",
   plugins: [
     react(),
     VitePWA({
