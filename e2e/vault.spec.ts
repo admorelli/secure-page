@@ -71,6 +71,9 @@ test("data persists across reload and unlocks with the right password", async ({
 }) => {
   await createVault(page, "correct horse battery");
   await addCard(page);
+  // Wait for the record to be rendered (proves the async save committed)
+  // BEFORE simulating a refresh — otherwise the navigation can race the write.
+  await expect(page.getByText("XXXX XX** **** 1111")).toBeVisible();
   // Simulate refresh.
   await page.reload();
   await unlock(page, "correct horse battery");
