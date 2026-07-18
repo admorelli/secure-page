@@ -1,0 +1,264 @@
+:root {
+  --bg: #0b0f1a;
+  --panel: #141a2b;
+  --panel-2: #1b2540;
+  --text: #e8edf7;
+  --muted: #8a96b3;
+  --accent: #4ade80;
+  --accent-ink: #052e16;
+  --border: #243049;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px 18px calc(28px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Lock screen */
+.lock {
+  justify-content: center;
+  align-items: stretch;
+  text-align: center;
+}
+.brand {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.sub {
+  color: var(--muted);
+  margin: -8px 0 18px;
+}
+.lock input {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+}
+.lock button {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 16px;
+}
+.lock button:disabled {
+  opacity: 0.5;
+}
+.lock .ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+.warn {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 8px;
+}
+.error {
+  color: #fca5a5;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+/* Cards screen */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bar h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.bar button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+.reveal-all {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 8px 12px;
+  border-radius: 10px;
+  align-self: flex-start;
+}
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.card-wrap {
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.card {
+  border-radius: 16px;
+  padding: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #1f2a44, #2d3c63);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.card.visa {
+  background: linear-gradient(135deg, #1a1f71, #2e3a9e);
+}
+.card.mastercard {
+  background: linear-gradient(135deg, #2a1a1a, #5a2a2a);
+}
+.card.amex {
+  background: linear-gradient(135deg, #0a6b3b, #0f8f52);
+}
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  opacity: 0.85;
+}
+.card-number {
+  font-size: 20px;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.card-row {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+}
+.field-label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+.add {
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Card form (Phase 3) */
+.form {
+  gap: 12px;
+}
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.form input,
+.form select,
+.form textarea {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+}
+.form textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+.form .primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  padding: 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 16px;
+}
+.card-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.card-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.card-actions .danger {
+  color: #fca5a5;
+  border-color: #5b2a2a;
+}
+/* Backup / restore (Phase 5) */
+.bar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.link {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  text-decoration: underline;
+  font-size: 13px;
+  padding: 8px 0;
+}
+.restore {
+  gap: 12px;
+  max-width: 420px;
+  margin: 8vh auto;
+}
+.restore h1 {
+  font-size: 22px;
+}
+.ok {
+  color: #7ee787;
+  font-size: 14px;
+}
+.ok.banner {
+  text-align: center;
+  padding: 10px;
+  background: rgba(126, 231, 135, 0.12);
+  border-radius: 10px;
+}
