@@ -262,3 +262,31 @@ body {
   background: rgba(126, 231, 135, 0.12);
   border-radius: 10px;
 }
+
+/* Install prompt (PWA) */
+.install-btn {
+  align-self: center;
+  margin: 0 auto 4px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.install-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 auto;
+  max-width: 420px;
+}
+.install-hint b {
+  color: var(--text);
+}

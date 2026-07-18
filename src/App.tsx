@@ -3,6 +3,7 @@ import "./App.css";
 import { maskCardNumber, formatCardNumber, type CreditCard } from "./lib/mask";
 import { createVaultStore, newId, type VaultStore } from "./lib/crypto/store";
 import { luhnValid, expiryValid } from "./lib/validate";
+import { InstallButton } from "./InstallButton";
 
 const RECORD_TYPE = "credit_card";
 const EMPTY_CARD: CreditCard = {
@@ -369,6 +370,8 @@ export default function App() {
 
   return (
     <>
+
+      <InstallButton />
       {restoreMsg && <p className="ok banner">{restoreMsg}</p>}
       <input
         ref={fileInput}
