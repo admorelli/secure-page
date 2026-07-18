@@ -1,33 +1,21 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import { maskCardNumber, formatCardNumber, type CreditCard } from "./lib/mask";
-import { createVaultStore, type VaultStore } from "./lib/crypto/store";
+import { createVaultStore, newId, type VaultStore } from "./lib/crypto/store";
+import { luhnValid, expiryValid } from "./lib/validate";
 
-// PoC sample data only — real cards will be added via the encrypted vault (Phase 3).
-const SAMPLE_CARDS: CreditCard[] = [
-  {
-    id: "1",
-    label: "Personal",
-    brand: "visa",
-    number: "4111111111111111",
-    holderName: "ALEX MORELLI",
-    expiry: "08/27",
-    cvc: "123",
-    pin: "4321",
-    notes: "",
-  },
-  {
-    id: "2",
-    label: "Work",
-    brand: "mastercard",
-    number: "5555555555554444",
-    holderName: "ALEX MORELLI",
-    expiry: "11/28",
-    cvc: "321",
-    pin: "9876",
-    notes: "",
-  },
-];
+const RECORD_TYPE = "credit_card";
+const EMPTY_CARD: CreditCard = {
+  id: "",
+  label: "",
+  brand: "visa",
+  number: "",
+  holderName: "",
+  expiry: "",
+  cvc: "",
+  pin: "",
+  notes: "",
+};
 
 function Locked({
   store,
@@ -104,11 +92,63 @@ function Locked({
   );
 }
 
+function CardForm({
+  initial,
+  onSave,
+  onCancel,
+}: {
+  initial: CreditCard;
+  onSave: (card: CreditCard) => void;
+  onCancel: () => void;
+}) {
+  const [card, setCard] = useState<CreditCard>(initial);
+  const [error, setError] = useState<string | null>(null);
+
+  const set = <K extends keyof CreditCard>(k: K, v: CreditCard[K]) =>
+    setCard((c) => ({ ...c, [k]: v }));
+
+  const submit = () => {
+    setError(null);
+    if (!card.label.trim()) return setError("Add a label.");
+    if (!luhnValid(card.number)) return setError("Card number is invalid.");
+    if (!expiryValid(card.expiry)) return setError("Expiry must be MM/YY, future.");
+    if (!/^\d{3,4}$/.test(card.cvc)) return setError("CVC must be 3-4 digits.");
+    if (!/^\d{4}$/.test(card.pin)) return setError("PIN must be 4 digits.");
+    onSave({ ...card, id: card.id || newId() });
+  };
+
+  return (
+    <main className="screen form">
+      <header className="bar">
+        <h1>{card.id ? "Edit card" : "Add card"}</h1>
+        <button onClick={onCancel}>Cancel</button>
+      </header>
+      <label>Label<input value={card.label} onChange={(e) => set("label", e.target.value)} placeholder="Personal" /></label>
+      <label>Brand
+        <select value={card.brand} onChange={(e) => set("brand", e.target.value as CreditCard["brand"])}>
+          <option value="visa">Visa</option>
+          <option value="mastercard">Mastercard</option>
+          <option value="amex">Amex</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>Number<input value={card.number} onChange={(e) => set("number", e.target.value)} inputMode="numeric" placeholder="4111 1111 1111 1111" /></label>
+      <label>Holder<input value={card.holderName} onChange={(e) => set("holderName", e.target.value.toUpperCase())} /></label>
+      <label>Expiry (MM/YY)<input value={card.expiry} onChange={(e) => set("expiry", e.target.value)} placeholder="08/27" /></label>
+      <label>CVC<input value={card.cvc} onChange={(e) => set("cvc", e.target.value)} inputMode="numeric" /></label>
+      <label>PIN<input value={card.pin} onChange={(e) => set("pin", e.target.value)} inputMode="numeric" /></label>
+      <label>Notes<textarea value={card.notes} onChange={(e) => set("notes", e.target.value)} /></label>
+      {error && <p className="error">{error}</p>}
+      <button className="primary" onClick={submit}>Save</button>
+    </main>
+  );
+}
+
 function CardView({ card, revealed }: { card: CreditCard; revealed: boolean }) {
   return (
     <div className={`card ${card.brand}`}>
       <div className="card-top">
-        <span className="card-label">{card.label}</span>
+        <span className="card-label">{card.label || card.brand}</span>
         <span className="card-brand">{card.brand}</span>
       </div>
       <div className="card-number">
@@ -140,12 +180,24 @@ function CardView({ card, revealed }: { card: CreditCard; revealed: boolean }) {
   );
 }
 
-function Cards({ onLock }: { onLock: () => void }) {
+function Cards({
+  cards,
+  onAdd,
+  onEdit,
+  onDelete,
+  onLock,
+}: {
+  cards: CreditCard[];
+  onAdd: () => void;
+  onEdit: (c: CreditCard) => void;
+  onDelete: (id: string) => void;
+  onLock: () => void;
+}) {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const reveal = (id: string) =>
     setRevealed((r) => ({ ...r, [id]: !r[id] }));
   const revealAll = () =>
-    setRevealed(Object.fromEntries(SAMPLE_CARDS.map((c) => [c.id, true])));
+    setRevealed(Object.fromEntries(cards.map((c) => [c.id, true])));
 
   return (
     <main className="screen cards">
@@ -153,47 +205,96 @@ function Cards({ onLock }: { onLock: () => void }) {
         <h1>Cards</h1>
         <button onClick={onLock}>Lock</button>
       </header>
-      <button className="reveal-all" onClick={revealAll}>
-        Reveal all
-      </button>
+      {cards.length > 0 && (
+        <button className="reveal-all" onClick={revealAll}>
+          Reveal all
+        </button>
+      )}
       <div className="card-list">
-        {SAMPLE_CARDS.map((c) => (
-          <button
-            key={c.id}
-            className="card-wrap"
-            onClick={() => reveal(c.id)}
-            aria-expanded={!!revealed[c.id]}
-          >
-            <CardView card={c} revealed={!!revealed[c.id]} />
-          </button>
+        {cards.length === 0 && <p className="warn">No cards yet. Add one.</p>}
+        {cards.map((c) => (
+          <div key={c.id} className="card-item">
+            <button
+              className="card-wrap"
+              onClick={() => reveal(c.id)}
+              aria-expanded={!!revealed[c.id]}
+            >
+              <CardView card={c} revealed={!!revealed[c.id]} />
+            </button>
+            <div className="card-actions">
+              <button onClick={() => onEdit(c)}>Edit</button>
+              <button className="danger" onClick={() => onDelete(c.id)}>
+                Delete
+              </button>
+            </div>
+          </div>
         ))}
       </div>
-      <button className="add">+ Add card</button>
+      <button className="add" onClick={onAdd}>
+        + Add card
+      </button>
     </main>
   );
 }
 
 export default function App() {
   const [store] = useState<VaultStore>(() => createVaultStore());
-  const [hasVault, setHasVault] = useState<boolean>(false);
+  const [hasVault, setHasVault] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const [cards, setCards] = useState<CreditCard[]>([]);
+  const [editing, setEditing] = useState<CreditCard | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     store.exists().then(setHasVault);
     const onHide = () => {
       store.lock();
       setUnlocked(false);
+      setCards([]);
     };
     document.addEventListener("visibilitychange", onHide);
     return () => document.removeEventListener("visibilitychange", onHide);
   }, [store]);
 
+  useEffect(() => {
+    if (unlocked) void store.listRecords<CreditCard>(RECORD_TYPE).then(setCards);
+  }, [unlocked, store]);
+
+  const doLock = () => {
+    store.lock();
+    setCards([]);
+    setUnlocked(false);
+  };
+
+  if (adding || editing) {
+    return (
+      <CardForm
+        initial={editing ?? EMPTY_CARD}
+        onCancel={() => {
+          setEditing(null);
+          setAdding(false);
+        }}
+        onSave={async (card) => {
+          if (editing) await store.upsertRecord(card.id, RECORD_TYPE, card);
+          else await store.addRecord(card.id, RECORD_TYPE, card);
+          setEditing(null);
+          setAdding(false);
+          setCards(await store.listRecords<CreditCard>(RECORD_TYPE));
+        }}
+      />
+    );
+  }
+
   return unlocked ? (
     <Cards
-      onLock={() => {
-        store.lock();
-        setUnlocked(false);
+      cards={cards}
+      onAdd={() => setAdding(true)}
+      onEdit={(c) => setEditing(c)}
+      onDelete={async (id) => {
+        await store.deleteRecord(id);
+        setCards(await store.listRecords<CreditCard>(RECORD_TYPE));
       }}
+      onLock={doLock}
     />
   ) : (
     <Locked

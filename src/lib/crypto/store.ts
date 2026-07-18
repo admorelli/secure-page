@@ -4,19 +4,31 @@ import type { UnlockStrategy } from "./strategy";
 import { defaultCryptoProvider } from "./provider";
 import { IndexedDbStorage } from "./storage";
 import { PasswordUnlockStrategy } from "./strategy";
-import { lockVault, type UnlockedVault } from "./vault";
+import {
+  lockVault,
+  encryptRecord,
+  decryptRecord,
+  type UnlockedVault,
+  type VaultEnvelope,
+  type EncryptedRecord,
+} from "./vault";
 
 /**
  * High-level vault store the UI talks to. Depends only on the three swappable
  * interfaces (CryptoProvider, VaultStorage, UnlockStrategy) — wired together at
  * construction via factories/defaults. Replacing any moving part (storage backend,
  * auth method, crypto impl) is a constructor/factory change, not a rewrite.
+ *
+ * While unlocked it keeps the encrypted envelope in memory so record CRUD can
+ * re-encrypt + persist without re-reading storage. The key + plaintext records
+ * live only in memory and are cleared on lock.
  */
 export class VaultStore {
   private provider: CryptoProvider;
   private storage: VaultStorage;
   private strategy: UnlockStrategy;
   private state: UnlockedVault | null = null;
+  private envelope: VaultEnvelope | null = null;
 
   constructor(opts?: {
     provider?: CryptoProvider;
@@ -40,12 +52,16 @@ export class VaultStore {
   /** Create a new vault (first run). Throws if one already exists. */
   async create(password: string): Promise<void> {
     if (await this.exists()) throw new Error("Vault already exists");
-    this.state = await this.strategy.create(this.provider, this.storage, password);
+    const res = await this.strategy.create(this.provider, this.storage, password);
+    this.state = res.unlocked;
+    this.envelope = res.envelope;
   }
 
   /** Unlock an existing vault. Throws WrongPasswordError on failure. */
   async unlock(password: string): Promise<void> {
-    this.state = await this.strategy.unlock(this.provider, this.storage, password);
+    const res = await this.strategy.unlock(this.provider, this.storage, password);
+    this.state = res.unlocked;
+    this.envelope = res.envelope;
   }
 
   /** Current in-memory unlocked state (for record crypto). Null when locked. */
@@ -53,16 +69,70 @@ export class VaultStore {
     return this.state;
   }
 
-  /** Lock: drop the in-memory key. */
+  /** Add a new encrypted record. Persists immediately. */
+  async addRecord<T>(id: string, type: string, payload: T): Promise<void> {
+    this.assertUnlocked();
+    const rec = await encryptRecord(
+      this.provider,
+      this.state!,
+      id,
+      type,
+      payload,
+    );
+    this.envelope!.records.push(rec);
+    await this.storage.save(this.envelope!);
+  }
+
+  /** Insert or replace a record by id. Persists immediately. */
+  async upsertRecord<T>(id: string, type: string, payload: T): Promise<void> {
+    this.assertUnlocked();
+    const rec = await encryptRecord(
+      this.provider,
+      this.state!,
+      id,
+      type,
+      payload,
+    );
+    const i = this.envelope!.records.findIndex((r) => r.id === id);
+    if (i >= 0) this.envelope!.records[i] = rec;
+    else this.envelope!.records.push(rec);
+    await this.storage.save(this.envelope!);
+  }
+
+  /** Delete a record by id. Persists immediately. */
+  async deleteRecord(id: string): Promise<void> {
+    this.assertUnlocked();
+    this.envelope!.records = this.envelope!.records.filter((r) => r.id !== id);
+    await this.storage.save(this.envelope!);
+  }
+
+  /** Decrypt every record of `type` into its plaintext payload. */
+  async listRecords<T>(type: string): Promise<T[]> {
+    this.assertUnlocked();
+    const recs = this.envelope!.records.filter((r) => r.type === type);
+    return Promise.all(
+      recs.map((r) => decryptRecord<T>(this.provider, this.state!, r)),
+    );
+  }
+
+  /** Lock: drop the in-memory key AND the decrypted envelope. */
   lock(): void {
     if (this.state) lockVault(this.state);
     this.state = null;
+    this.envelope = null;
   }
 
   /** Wipe the stored vault (does not lock first). */
   async wipe(): Promise<void> {
     await this.storage.clear();
     this.state = null;
+    this.envelope = null;
+  }
+
+  private assertUnlocked(): void {
+    if (!this.state?.key || !this.envelope) {
+      throw new Error("Vault is locked");
+    }
   }
 }
 
@@ -74,3 +144,10 @@ export function createVaultStore(opts?: {
 }): VaultStore {
   return new VaultStore(opts);
 }
+
+/** Generate a record id without a uuid dependency. */
+export function newId(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+export type { EncryptedRecord };
