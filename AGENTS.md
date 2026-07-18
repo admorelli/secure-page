@@ -67,14 +67,15 @@ dependency**.
 
 ## What's built vs planned
 
-- **Built (Phases 1–4):** swappable crypto provider (PBKDF2 + AES-GCM-256);
-  swappable IndexedDB storage; password `UnlockStrategy`; **biometric
-  `UnlockStrategy` via WebAuthn PRF** (key-wrapped DEK — password is the
-  fallback). Real create/unlock/lock wired to UI; encrypted credit-card
-  add/edit/delete/reveal with Luhn + expiry + CVC/PIN validation; auto-lock on
-  tab hide.
-- **Planned:** Phase 4 biometric unlock (`BiometricUnlockStrategy` via WebAuthn PRF);
-  Phase 5 encrypted backup export/import; Phase 6 other record types (login/note/secret).
+- **Built (Phases 1–5):** swappable crypto provider (PBKDF2 + AES-GCM-256);
+  swappable IndexedDB storage; password `UnlockStrategy`; biometric
+  `UnlockStrategy` via WebAuthn PRF (key-wrapped DEK — password fallback);
+  encrypted **backup export/import** (the ciphertext `VaultEnvelope` is
+  downloadable + re-importable, password-verified before it replaces
+  storage). Real create/unlock/lock wired to UI; encrypted credit-card
+  add/edit/delete/reveal with Luhn + expiry + CVC/PIN validation; auto-lock
+  on tab hide.
+- **Planned:** Phase 6 other record types (login/password, secure note, app secret).
 
 ## File map (crypto core)
 

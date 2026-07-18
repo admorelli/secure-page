@@ -110,3 +110,28 @@ test("delete a card removes it", async ({ page }) => {
   await page.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText("No cards yet. Add one.")).toBeVisible();
 });
+
+test("backup export + re-import round-trips a card", async ({ page }) => {
+  await createVault(page, "correct horse battery");
+  await addCard(page);
+  await expect(page.getByText("XXXX XX** **** 1111")).toBeVisible();
+
+  // Export -> wait for the download.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Backup", exact: true }).click(),
+  ]);
+  const path = await download.path();
+  expect(path).toBeTruthy();
+
+  // Re-import the same backup file (with the vault still present).
+  await page.getByRole("button", { name: "Restore backup" }).click();
+  await page.setInputFiles('input[type="file"]', path!);
+  await page.getByPlaceholder("Backup password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByText("Backup restored")).toBeVisible();
+
+  // The imported vault is locked; unlock and the card is back.
+  await unlock(page, "correct horse battery");
+  await expect(page.getByText("XXXX XX** **** 1111")).toBeVisible();
+});

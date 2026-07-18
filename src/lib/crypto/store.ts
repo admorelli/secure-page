@@ -8,9 +8,13 @@ import {
   lockVault,
   encryptRecord,
   decryptRecord,
+  unlockVault,
+  parseEnvelope,
+  BACKUP_FORMAT,
   type UnlockedVault,
   type VaultEnvelope,
   type EncryptedRecord,
+  type BackupFile,
 } from "./vault";
 
 /**
@@ -151,6 +155,36 @@ export class VaultStore {
   /** Wipe the stored vault (does not lock first). */
   async wipe(): Promise<void> {
     await this.storage.clear();
+    this.state = null;
+    this.envelope = null;
+  }
+
+  /**
+   * Export the encrypted vault as a backup JSON string. Works whether locked
+   * or unlocked (it serializes the stored ciphertext blob, never plaintext).
+   * The backup is the same envelope format persisted to IndexedDB.
+   */
+  async exportBackup(): Promise<string> {
+    const envelope = await this.storage.load();
+    if (!envelope) throw new Error("No vault to back up");
+    const file: BackupFile = {
+      format: BACKUP_FORMAT,
+      vaultVersion: envelope.version,
+      envelope,
+    };
+    return JSON.stringify(file);
+  }
+
+  /**
+   * Import a backup, replacing the stored vault — but only after verifying the
+   * given password actually opens it (unwraps the DEK). If the password is
+   * wrong or the file is corrupt, the current vault is left untouched.
+   * Leaves the vault locked so the user unlocks normally afterwards.
+   */
+  async importBackup(json: string, password: string): Promise<void> {
+    const envelope = parseEnvelope(json);
+    await unlockVault(this.provider, envelope, password); // throws on bad password
+    await this.storage.save(envelope);
     this.state = null;
     this.envelope = null;
   }

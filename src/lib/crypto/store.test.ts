@@ -61,3 +61,46 @@ describe("VaultStore (Phase 2 wiring)", () => {
     expect(store.isUnlocked()).toBe(false);
   });
 });
+
+describe("VaultStore backup (Phase 5)", () => {
+  let store: VaultStore;
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("exports then re-imports the same vault, cards survive", async () => {
+    await store.create("master-pw");
+    await store.addRecord("c1", "credit_card", { number: "4111111111111111" });
+    const backup = await store.exportBackup();
+
+    // Simulate a fresh device: wipe, then import the backup.
+    await store.wipe();
+    expect(await store.exists()).toBe(false);
+    await store.importBackup(backup, "master-pw");
+
+    // Imported vault is left locked; unlock to read records.
+    await store.unlock("master-pw");
+    const cards = await store.listRecords<{ number: string }>("credit_card");
+    expect(cards).toEqual([{ number: "4111111111111111" }]);
+  });
+
+  it("rejects a wrong backup password (current vault untouched)", async () => {
+    await store.create("master-pw");
+    await store.addRecord("c1", "credit_card", { number: "1111" });
+    const backup = await store.exportBackup();
+
+    await expect(store.importBackup(backup, "wrong")).rejects.toThrow();
+    // The original vault is still intact and openable.
+    await store.unlock("master-pw");
+    const cards = await store.listRecords<{ number: string }>("credit_card");
+    expect(cards).toEqual([{ number: "1111" }]);
+  });
+
+  it("rejects malformed / corrupt backup JSON", async () => {
+    await store.create("master-pw");
+    await expect(store.importBackup("not json{", "master-pw")).rejects.toThrow();
+    await expect(
+      store.importBackup(JSON.stringify({ envelope: { version: 999 } }), "x"),
+    ).rejects.toThrow();
+  });
+});

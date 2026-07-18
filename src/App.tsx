@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, type ChangeEvent } from "react";
 import "./App.css";
 import { maskCardNumber, formatCardNumber, type CreditCard } from "./lib/mask";
 import { createVaultStore, newId, type VaultStore } from "./lib/crypto/store";
@@ -216,12 +216,16 @@ function Cards({
   onEdit,
   onDelete,
   onLock,
+  onBackup,
+  onRestoreClick,
 }: {
   cards: CreditCard[];
   onAdd: () => void;
   onEdit: (c: CreditCard) => void;
   onDelete: (id: string) => void;
   onLock: () => void;
+  onBackup: () => void;
+  onRestoreClick: () => void;
 }) {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const reveal = (id: string) =>
@@ -233,7 +237,10 @@ function Cards({
     <main className="screen cards">
       <header className="bar">
         <h1>Cards</h1>
-        <button onClick={onLock}>Lock</button>
+        <div className="bar-actions">
+          <button className="ghost" onClick={onBackup}>Backup</button>
+          <button onClick={onLock}>Lock</button>
+        </div>
       </header>
       {cards.length > 0 && (
         <button className="reveal-all" onClick={revealAll}>
@@ -263,6 +270,9 @@ function Cards({
       <button className="add" onClick={onAdd}>
         + Add card
       </button>
+      <button className="link" onClick={onRestoreClick}>
+        Restore backup
+      </button>
     </main>
   );
 }
@@ -274,6 +284,11 @@ export default function App() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [editing, setEditing] = useState<CreditCard | null>(null);
   const [adding, setAdding] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<string | null>(null);
+  const [restorePw, setRestorePw] = useState("");
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     store.exists().then(setHasVault);
@@ -296,6 +311,43 @@ export default function App() {
     setUnlocked(false);
   };
 
+  const doBackup = async () => {
+    try {
+      const json = await store.exportBackup();
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `secure-page-backup-${stamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setRestoreError(e instanceof Error ? e.message : "Backup failed");
+    }
+  };
+
+  const onRestoreFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!f) return;
+    setRestoreError(null);
+    setRestoreMsg(null);
+    setRestoreFile(await f.text());
+  };
+
+  const confirmRestore = async () => {
+    if (!restoreFile) return;
+    try {
+      await store.importBackup(restoreFile, restorePw);
+      setRestoreFile(null);
+      setRestorePw("");
+      setRestoreMsg("Backup restored — unlock to view your cards.");
+      doLock(); // imported vault is locked; user unlocks normally
+    } catch (e) {
+      setRestoreError(e instanceof Error ? e.message : "Restore failed");
+    }
+  };
   if (adding || editing) {
     return (
       <CardForm
@@ -315,29 +367,74 @@ export default function App() {
     );
   }
 
-  return unlocked ? (
-    <Cards
-      cards={cards}
-      onAdd={() => setAdding(true)}
-      onEdit={(c) => setEditing(c)}
-      onDelete={async (id) => {
-        await store.deleteRecord(id);
-        setCards(await store.listRecords<CreditCard>(RECORD_TYPE));
-      }}
-      onLock={doLock}
-    />
-  ) : (
-    <Locked
-      store={store}
-      hasVault={hasVault}
-      onResult={(ok, error) => {
-        if (ok) {
-          setHasVault(true);
-          setUnlocked(true);
-        } else {
-          console.warn("unlock failed:", error);
-        }
-      }}
-    />
+  return (
+    <>
+      {restoreMsg && <p className="ok banner">{restoreMsg}</p>}
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: "none" }}
+        onChange={onRestoreFile}
+      />
+      {restoreFile ? (
+        <main className="screen restore">
+          <h1>Restore backup</h1>
+          <p className="sub">
+            Enter the backup's password. This replaces the current vault only if
+            the password opens the backup.
+          </p>
+          <input
+            type="password"
+            placeholder="Backup password"
+            value={restorePw}
+            onChange={(e) => setRestorePw(e.target.value)}
+            autoComplete="current-password"
+          />
+          {restoreMsg && <p className="ok">{restoreMsg}</p>}
+          {restoreError && <p className="error">{restoreError}</p>}
+          <button onClick={confirmRestore} disabled={!restorePw}>
+            Restore
+          </button>
+          <button
+            className="ghost"
+            onClick={() => {
+              setRestoreFile(null);
+              setRestorePw("");
+              setRestoreError(null);
+            }}
+          >
+            Cancel
+          </button>
+        </main>
+      ) : unlocked ? (
+        <Cards
+          cards={cards}
+          onAdd={() => setAdding(true)}
+          onEdit={(c) => setEditing(c)}
+          onDelete={async (id) => {
+            await store.deleteRecord(id);
+            setCards(await store.listRecords<CreditCard>(RECORD_TYPE));
+          }}
+          onLock={doLock}
+          onBackup={doBackup}
+          onRestoreClick={() => fileInput.current?.click()}
+        />
+      ) : (
+        <Locked
+          store={store}
+          hasVault={hasVault}
+          onResult={(ok, error) => {
+            if (ok) {
+              setHasVault(true);
+              setUnlocked(true);
+              setRestoreMsg(null);
+            } else {
+              console.warn("unlock failed:", error);
+            }
+          }}
+        />
+      )}
+    </>
   );
 }

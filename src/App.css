@@ -230,3 +230,35 @@ body {
   color: #fca5a5;
   border-color: #5b2a2a;
 }
+/* Backup / restore (Phase 5) */
+.bar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.link {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  text-decoration: underline;
+  font-size: 13px;
+  padding: 8px 0;
+}
+.restore {
+  gap: 12px;
+  max-width: 420px;
+  margin: 8vh auto;
+}
+.restore h1 {
+  font-size: 22px;
+}
+.ok {
+  color: #7ee787;
+  font-size: 14px;
+}
+.ok.banner {
+  text-align: center;
+  padding: 10px;
+  background: rgba(126, 231, 135, 0.12);
+  border-radius: 10px;
+}

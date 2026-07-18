@@ -100,7 +100,8 @@ All work is on the `feat/pwa-poc` branch (not yet merged to `master`).
   (password); wired real `create`/`unlock`/`lock` into the UI.
 - **Phase 3** — real encrypted credit-card CRUD through the vault (add/edit/delete/reveal).
 - **Phase 4** — biometric unlock via a `BiometricUnlockStrategy` (WebAuthn PRF); password fallback.
-- **Phase 5 (planned)** — encrypted backup export/import.
+- **Phase 5** — encrypted backup export/import (the ciphertext `VaultEnvelope` is
+  downloadable and re-importable, password-verified before it replaces storage).
 - **Phase 6 (planned)** — other record types (login, note, secret).
 
 ## Live demo

@@ -258,3 +258,44 @@ export async function decryptRecord<T>(
 export function lockVault(vault: UnlockedVault): void {
   vault.key = undefined;
 }
+
+// --- Backup (export/import) ----------------------------------------------
+
+/**
+ * On-disk backup shape: the encrypted envelope plus a format marker. The backup
+ * is the CIPHERTEXT vault — never plaintext — so a leaked file yields nothing
+ * without the password/biometric that unwraps the DEK.
+ */
+export const BACKUP_FORMAT = "secure-page-backup";
+export interface BackupFile {
+  format: string;
+  vaultVersion: number;
+  envelope: VaultEnvelope;
+}
+
+/** Parse + lightly validate a backup file. Throws a clear Error on bad input. */
+export function parseEnvelope(json: string): VaultEnvelope {
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch {
+    throw new Error("Backup is not valid JSON");
+  }
+  const env = (data as Partial<BackupFile> | null)?.envelope;
+  if (!env || typeof env !== "object") {
+    throw new Error("Backup file is missing the vault envelope");
+  }
+  if (env.version !== VAULT_VERSION) {
+    throw new Error(`Unsupported vault version: ${String(env.version)}`);
+  }
+  if (!env.kdf?.salt || typeof env.kdf.iterations !== "number") {
+    throw new Error("Corrupted backup (key derivation params)");
+  }
+  if (!env.wrap?.pw?.ciphertext) {
+    throw new Error("Corrupted backup (no password-wrapped key)");
+  }
+  if (!env.authTag?.ciphertext) {
+    throw new Error("Corrupted backup (auth tag missing)");
+  }
+  return env as VaultEnvelope;
+}

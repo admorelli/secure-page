@@ -118,8 +118,11 @@ independently replaceable.
 - **Phase 4 — DONE.** Biometric unlock: `BiometricUnlockStrategy` via WebAuthn
   PRF; password fallback. A DEK is wrapped under both a password-KEK and a
   biometric-KEK so either path opens the same vault.
-- **Phase 5 — PLANNED.** Encrypted backup: export/import the `VaultEnvelope` blob (file or
-  clipboard), local-only to keep the zero-knowledge promise.
+- **Phase 5 — DONE.** Encrypted backup: `VaultStore.exportBackup()`
+  serializes the (ciphertext) `VaultEnvelope` to a downloadable JSON file;
+  `importBackup(json, password)` verifies the password unwraps the DEK
+  BEFORE overwriting storage, so a wrong/corrupt backup leaves the current
+  vault untouched. The backup is ciphertext only — zero-knowledge holds.
 - **Phase 6 — PLANNED.** Other record types: login/password, secure note, app secret.
   Reuse `addRecord`/`listRecords<T>` — cheap once Phase 3 exists.
 
@@ -137,8 +140,9 @@ independently replaceable.
 - `npm run lint && npm run test && npm run build` must be green before any phase commit.
 - `npm run test:e2e` (Playwright) runs the full app in Chromium against the production
   build served at `/secure-page/`; it covers create-vault, add/reveal/delete card,
-  wrong-password rejection, and persistence across reload. Each test wipes IndexedDB.
-- Current: lint 0/0, **27 unit tests** pass, **8 E2E tests** pass, build emits the PWA
+  wrong-password rejection, persistence across reload, biometric graceful
+  degradation, and backup export→re-import round-trip. Each test wipes IndexedDB.
+- Current: lint 0/0, **30 unit tests** pass, **9 E2E tests** pass, build emits the PWA
   service worker + manifest.
 - Crypto/store tests use an in-memory `VaultStorage` stand-in (no fake-indexeddb).
 - Manual: install as PWA on a real phone (Android Chrome + iOS Safari), offline load,
