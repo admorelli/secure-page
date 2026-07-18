@@ -1,151 +1,140 @@
 # DEV_PLAN — Secure Page (Offline Encrypted Vault PWA)
 
-Status: DRAFT v1 — open decisions in Section 8 need your confirmation before build.
+Status: MVP functional. Phases 1–3 implemented on `feat/pwa-poc`. Phases 4–6 planned.
 
 ## 1. Product goal
 
 A mobile-installable web app (PWA) that stores sensitive security data
 (login/password, credit cards + PIN, application secrets, notes) **locally on the
 device only**. Data is encrypted at rest and protected by a master password and/or
-device biometrics (fingerprint / faceID / security key). Nothing is ever sent to a
+device biometrics (fingerprint / FaceID / security key). Nothing is ever sent to a
 server — there is no backend.
 
-Initial use case (Phase 3): **credit cards**. The user adds cards with full data;
-the list shows a masked card visual (e.g. `XXXX XX** **** 1234`); on unlock the full
-number, CVC, expiry, and PIN are revealed.
+First use case delivered: **credit cards**. Add cards with full data; the list shows a
+masked card visual (`XXXX XX** **** 1234`); on unlock the full number, CVC, expiry, and
+PIN are revealed (decrypted in memory only).
 
 ## 2. Core principles
 
 - **Local-first / zero-knowledge.** All data lives in the browser (IndexedDB). No
-  network calls, no telemetry, no backend.
-- **Encryption at rest.** The vault is one encrypted blob. Without the key, the blob
-  is useless.
-- **Installable PWA.** Addable to the phone home screen; works offline.
-- **Fail closed.** App boots to a locked state. No plaintext in DOM, localStorage, or
-  memory until the correct key is derived and the session is unlocked.
+  network calls, no telemetry, no backend. The only network use is the static GitHub
+  Pages deploy.
+- **Encryption at rest.** The vault is an encrypted envelope. Without the key, it is
+  useless.
+- **Installable PWA.** Addable to the phone home screen; works offline (service worker).
+- **Fail closed.** App boots to a locked state. No plaintext in DOM, storage, or memory
+  until the key is derived and the session is unlocked.
 
-## 3. Tech stack (already scaffolded)
+## 3. Tech stack (implemented)
 
-- Vite + React 19 + TypeScript (scaffold present; lint/test/build green).
-- **Web Crypto API** (`crypto.subtle`): AES-GCM-256, PBKDF2-HMAC-SHA256, WebAuthn PRF.
-- **IndexedDB** for the encrypted vault blob (preferred over localStorage for size +
-  structured/large records). Use a tiny wrapper (recommend `idb`, ~1KB) or hand-rolled
-  promises — decide in Phase 1.
-- PWA: `manifest.webmanifest` + service worker for offline/install (scaffold may need
-  enabling — verify `vite-plugin-pwa` or equivalent is configured).
-- Testing: Vitest + @testing-library/react (present). Aim 80%+ coverage on crypto +
-  vault modules.
+- Vite 8 + React 19 + TypeScript (strict).
+- **Web Crypto API** (`crypto.subtle`): AES-GCM-256, PBKDF2-HMAC-SHA256. WebAuthn PRF
+  planned for biometric unlock (Phase 4).
+- **IndexedDB** for the encrypted vault envelope (hand-rolled promise wrapper in
+  `storage.ts` — no `idb` dependency).
+- **vite-plugin-pwa** for manifest + service worker (offline + install).
+- **Oxlint** (lint), **Prettier** (format), **Vitest** (tests, default Node env — Web
+  Crypto + `structuredClone` are available in modern Node, so no fake-indexeddb needed).
 
-## 4. Data model
+## 4. Data model (as implemented)
 
-```
-VaultBlob (stored encrypted in IndexedDB)
+```ts
+VaultEnvelope (stored encrypted in IndexedDB)
 {
   version: 1,
-  kdf: { salt, iterations, hash: "SHA-256" },   // PBKDF2 params for password derived key
-  authTag: <bytes>,                               // integrity check of the master key
-  records: [ EncryptedRecord, ... ]              // each record independently encrypted
+  kdf: { salt: base64, iterations: 250000, hash: "SHA-256" },
+  authTag: { iv: base64, ciphertext: base64 },  // known constant; decrypt proves key
+  records: EncryptedRecord[]
 }
 
 EncryptedRecord
 {
-  id: uuid,
-  type: "credit_card" | "login" | "note" | "secret",
-  iv: <base64>,
-  ciphertext: <base64>        // AES-GCM of the JSON plaintext record
+  id: string,                     // crypto.randomUUID()
+  type: "credit_card",            // more types in Phase 6
+  iv: base64,                     // 12-byte random AES-GCM IV
+  ciphertext: base64             // AES-GCM output (ciphertext + 16-byte tag)
 }
 
 CreditCard (plaintext, only in memory while unlocked)
 {
-  label: string,
-  brand: "visa" | "mastercard" | "amex" | "other",
-  number: string,             // full PAN
-  holderName: string,
-  expiry: "MM/YY",            // valid until
-  cvc: string,
-  pin: string,
-  notes: string
+  id, label, brand: "visa"|"mastercard"|"amex"|"other",
+  number, holderName, expiry: "MM/YY", cvc, pin, notes
 }
 ```
 
-Per-record IV + ciphertext so a single tampered record can't decrypt and the rest stay
-intact. The whole `records` array can be one ciphertext or per-record — per-record is
-simpler to edit incrementally; recommend per-record.
+Each record is independently encrypted with its own random IV; a tampered record fails
+GCM auth alone and the rest still decrypt. `VaultStore` keeps the envelope in memory
+while unlocked so record CRUD re-encrypts + persists without re-reading storage.
 
 ## 5. Security model
 
-- **Key derivation (password):** PBKDF2-HMAC-SHA256, random 16-byte salt, high
-  iteration count (target >= 250k, tune for mobile). The derived 256-bit key is the
-  AES-GCM key. Key lives only in memory after unlock; zeroed on lock.
-- **Encryption:** AES-GCM-256, 12-byte random IV per record. GCM gives
-  confidentiality + integrity (tamper detection).
-- **Unlock check:** a known `authTag` value is encrypted into the vault on creation;
-  successful decrypt proves the correct key. Wrong password => GCM decrypt throws =>
-  rejected, no plaintext ever materializes.
-- **Biometric / device unlock:** WebAuthn **PRF extension** derives a deterministic
-  symmetric key from a platform authenticator (fingerprint, FaceID) or roaming
-  authenticator (security key / "keycard"). That PRF key wraps/derives the same AES key
-  as the password path, so either unlock method opens the same vault. Password remains
-  the mandatory baseline (biometric is progressive enhancement — not all devices/browsers
-  support PRF yet).
+- **Key derivation (password):** PBKDF2-HMAC-SHA256, random 16-byte salt, 250,000
+  iterations → AES-256-GCM key. Key lives only in memory after unlock; cleared on lock.
+- **Encryption:** AES-GCM-256, 12-byte random IV per record. GCM gives confidentiality +
+  integrity (tamper detection).
+- **Unlock check:** a known constant is encrypted into the vault at creation (`authTag`);
+  successful decrypt proves the correct key. Wrong password ⇒ GCM decrypt throws ⇒
+  `WrongPasswordError`, no plaintext ever materializes.
+- **Biometric / device unlock (Phase 4):** WebAuthn **PRF extension** derives a
+  deterministic symmetric key from a platform authenticator (fingerprint, FaceID) or
+  roaming authenticator (security key / "keycard"). That PRF key derives the same AES key
+  as the password path via a new `BiometricUnlockStrategy` implementing the existing
+  `UnlockStrategy` interface. Password remains the mandatory baseline.
 - **Threat model (honest scope):**
-  - PROTECTS: someone who gets the phone, the IndexedDB files, or a backup export —
-    they see only ciphertext.
-  - DOES NOT PROTECT: malware / keylogger / screen recorder on an already-unlocked
-    device; a coerced unlock; OS-level compromise. State this plainly in-app.
-- **No plaintext at rest:** never write PAN/CVC/PIN to DOM attributes, console, or
-  storage outside the encrypted blob. Clear decrypted records from memory on lock.
+  - PROTECTS: someone who gets the phone, the IndexedDB files, or a backup export — they
+    see only ciphertext; brute-forcing the password is slowed by PBKDF2.
+  - DOES NOT PROTECT: malware / keylogger / screen recorder on an already-unlocked device;
+    a coerced unlock; OS-level compromise.
+- **No plaintext at rest:** the key and decrypted records never touch disk or storage;
+  cleared from memory on lock.
 
-## 6. UI / UX (initial: credit card)
+## 6. Architecture — three swappable seams
 
-- **Onboarding (first run):** set master password (strength meter + confirm + warning
-  that there is NO recovery if forgotten — local-only by design). Optionally enroll
-  biometric.
-- **Lock screen:** password field + "Unlock with biometrics" button (if enrolled).
-- **Cards list:** generated card visual (Apple-Wallet style) showing brand, label, and
-  **masked** number (`XXXX XX** **** 1234`). No CVC/PIN/expiry visible.
-- **Reveal (on unlock):** tapping a card shows full number, CVC, expiry, PIN (PIN
-  masked behind a tap-to-reveal too, optional).
-- **Add / Edit card form:** all fields; validated (Luhn for number, MM/YY format).
-- **Settings:** change master password (re-derive + re-encrypt all records), enable/
-  disable biometric, export encrypted backup, import backup, wipe vault.
-- **Auto-lock:** lock after inactivity / on tab hide (configurable).
+Wired together in `VaultStore` via constructor/factory injection
+(`createVaultStore`). Replacing any seam is a constructor/factory change, not a rewrite —
+this was a deliberate requirement so the moving parts (crypto, storage, auth) are
+independently replaceable.
+
+- **`CryptoProvider`** (`crypto/types.ts`, `crypto/provider.ts`): derive/encrypt/decrypt/
+  random. Today: `WebCryptoProvider` (PBKDF2 + AES-GCM). A WebAuthn-PRF or native-backed
+  provider slots in here. Factory: `createCryptoProvider()`.
+- **`VaultStorage`** (`crypto/storage.ts`): persist/load/clear the encrypted envelope.
+  Today: `IndexedDbStorage` (ciphertext only).
+- **`UnlockStrategy`** (`crypto/strategy.ts`): how the key is obtained. Today:
+  `PasswordUnlockStrategy` (master password). A `BiometricUnlockStrategy` implements the
+  same interface without touching the vault core or UI.
+- **`VaultStore`** (`crypto/store.ts`): the object the UI talks to — `exists`, `create`,
+  `unlock`, `lock`, `addRecord`, `upsertRecord`, `deleteRecord`, `listRecords<T>`, `wipe`.
+  `newId()` generates record ids (no uuid dependency).
 
 ## 7. Phased roadmap
 
-- **Phase 1 — Foundations:** verify/enable PWA; IndexedDB wrapper; `crypto` module
-  (deriveKey, encryptRecord, decryptRecord, randomSalt/IV) with unit tests. No UI logic.
-- **Phase 2 — Vault lifecycle:** create vault, lock/unlock, password change, persistence
-  in IndexedDB. Component tests for lock/unlock state.
-- **Phase 3 — Credit card use case:** list (masked), add/edit form, reveal-on-unlock.
-  This is the deliverable for v0.1.
-- **Phase 4 — Biometric unlock:** WebAuthn PRF enroll + unlock; password fallback.
-- **Phase 5 — Backup/restore:** export/import encrypted blob (file or clipboard),
-  PWA install polish, offline check.
-- **Phase 6 — Other record types:** login/password, secure note, app secret (reuse the
-  record/encrypt layer — cheap once Phase 3 lands).
+- **Phase 1 — DONE.** Swappable `CryptoProvider` + vault crypto (PBKDF2 + AES-GCM-256),
+  unit-tested (factory, create/unlock, wrong-password, unique IV, GCM tamper, lock).
+- **Phase 2 — DONE.** Swappable `VaultStorage` (IndexedDB) + `UnlockStrategy` (password);
+  wired real `create`/`unlock`/`lock` into the UI; auto-lock on tab hide.
+- **Phase 3 — DONE.** Real encrypted credit-card CRUD through the vault (add/edit/delete/
+  reveal-on-unlock), Luhn + expiry + CVC/PIN validation, no sample data.
+- **Phase 4 — PLANNED.** Biometric unlock: `BiometricUnlockStrategy` via WebAuthn PRF;
+  password fallback. Enroll + unlock flows.
+- **Phase 5 — PLANNED.** Encrypted backup: export/import the `VaultEnvelope` blob (file or
+  clipboard), local-only to keep the zero-knowledge promise.
+- **Phase 6 — PLANNED.** Other record types: login/password, secure note, app secret.
+  Reuse `addRecord`/`listRecords<T>` — cheap once Phase 3 exists.
 
-## 8. Open decisions — PLEASE CONFIRM
+## 8. Decided design choices (were open; resolved by the factory approach)
 
-1. **Biometric approach.** Recommend: WebAuthn PRF (covers fingerprint, FaceID, AND
-   security-key/"keycard" uniformly) with mandatory password fallback. Alternative:
-   password-only, no biometric (simpler, ships faster). 
-   -> Default if no answer: WebAuthn PRF + password fallback.
-2. **Master key model.** Recommend: single master password unlocks the whole vault
-   (standard password-manager model). Alternative: per-item password (more complex,
-   worse UX). -> Default: single master.
-3. **Backup.** Recommend: local export of the encrypted blob only (no cloud, keeps
-   zero-knowledge promise). Alternative: skip backup in v0.1. -> Default: local export.
-4. **Card visual.** Recommend: generated card graphic (brand color/logo + masked
-   number), NOT storing a photo of the real card (photos are a leakage risk).
-   -> Default: generated visual.
+1. **Biometric** → WebAuthn PRF (covers fingerprint, FaceID, security key uniformly) with
+   mandatory password fallback. Phase 4.
+2. **Master key** → single master password unlocks the whole vault (standard model).
+3. **Backup** → local export of the encrypted blob only (no cloud). Phase 5.
+4. **Card visual** → generated card graphic (brand + masked number); never a photo of the
+   real card.
 
 ## 9. Verification
 
-- Unit: crypto round-trip (encrypt->decrypt equal), wrong password fails to decrypt,
-  tampered ciphertext fails GCM auth, KDF salt/IV uniqueness.
-- Component: lock->unlock transition, add card -> appears masked, reveal -> shows
-  full data, wrong password rejected.
+- `npm run lint && npm run test && npm run build` must be green before any phase commit.
+- Current: lint 0/0, **24 tests** pass, build emits the PWA service worker + manifest.
+- Crypto/store tests use an in-memory `VaultStorage` stand-in (no fake-indexeddb).
 - Manual: install as PWA on a real phone (Android Chrome + iOS Safari), offline load,
   biometric unlock (Phase 4).
-- Gate before each phase commit: `npm run lint && npm run test && npm run build` green.
