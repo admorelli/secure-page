@@ -303,6 +303,11 @@ body {
   font-size: 13px;
   cursor: pointer;
 }
+.install-banner-btn.ghost {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
 .install-banner-x {
   flex: 0 0 auto;
   width: 26px;
