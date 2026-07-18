@@ -1,15 +1,15 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Build outputs
 dist/
 
-# Environment files
+# Environment
 .env
 .env.local
 .env.*.local
 
-# Editor / OS
+# Editor/OS
 .DS_Store
 Thumbs.db
 *.swp

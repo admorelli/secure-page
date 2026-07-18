@@ -1,44 +1,32 @@
-# Secure Page
+# React + TypeScript + Vite
 
-Local-first, encrypted vault for sensitive data built in TypeScript with Vite, React, and Vitest. The current focus is credit card storage on-device; future targets include bank credentials, document metadata, recovery codes, and custom sensitive notes.
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-This repository is **not** the blog itself. Read the corresponding blog post at:
-`https://admorelli.github.io/static-blog/posts/secure-card-vault-local-first-encrypted-sensitive-data-storage/`
+Currently, two official plugins are available:
 
-## What this is
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-- data never leaves the device unless the user explicitly exports it
-- encryption happens on-device before anything is written to storage
-- unlock is a single secret the user controls: a password, PIN, or biometric gate
-- the app stays simple and focused, with room to grow
+## React Compiler
 
-## Project layout
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-- `src/` — application source
-- `public/` — static assets served as-is
-- `index.html` — Vite entry
-- `vite.config.ts` — dev/build/PWA configuration
-- `tsconfig.json` — TypeScript settings
+## Expanding the Oxlint configuration
 
-## Commands
+If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
 
-- `npm run dev` — local development server
-- `npm run build` — typecheck and production build
-- `npm run preview` — serve the built output
-- `npm run lint` — ESLint
-- `npm run format` — Prettier
-- `npm run test` — Vitest
-- `npm run deploy` — build and publish to GitHub Pages
+```json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}
+```
 
-## Verification
-
-Run the full gate before opening work-in-progress PRs:
-
-- `npm run test`
-- `npm run lint`
-- `npm run build`
-- `npm run format`
-
-## Status
-
-MVP scope: credit cards only, with masked display by default and an unlock flow that decrypts data in memory for viewing.
+See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
